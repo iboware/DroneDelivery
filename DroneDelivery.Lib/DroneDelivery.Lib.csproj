@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Dijkstra.NET" Version="1.2.1" />
     <PackageReference Include="Nominatim.API" Version="1.5.2" />
   </ItemGroup>
 

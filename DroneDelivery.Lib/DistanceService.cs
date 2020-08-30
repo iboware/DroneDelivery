@@ -1,20 +1,21 @@
 using System;
 using System.Threading.Tasks;
-using Nominatim.API.Geocoders;
-using Nominatim.API.Models;
 using System.Linq;
 using System.Collections.Generic;
 using DroneDelivery.Lib.Model;
 using DroneDelivery.Lib.Utilities;
+using Dijkstra.NET.Graph;
+using GeoJSON.Net.Geometry;
+using Dijkstra.NET.ShortestPath;
 
 namespace DroneDelivery.Lib
 {
     public class DistanceService
     {
 
-        private IList<DroneDepot> _depots;
-        private IList<Store> _stores;
-        private const double DRONESPEED = 60.0;
+        private readonly IList<DroneDepot> _depots;
+        private readonly IList<Store> _stores;
+        private const double DRONESPEED = 16.666666666666668; // 60 km/h in m/s
         private readonly LocationService _locationService;
 
 
@@ -60,29 +61,13 @@ namespace DroneDelivery.Lib
         {
 
             Location location = await _locationService.Find(address);
-            double? closest = double.MaxValue,
-            current;
 
-            Store store = new Store
+            _stores.Add(new Store
             {
                 Name = name,
                 Coordinate = location.Coordinate,
                 Address = location.Address
-            };
-
-            foreach (DroneDepot depot in _depots)
-            {
-
-                current = depot.Coordinate.Distance(location.Coordinate);
-                if (current < closest)
-                {
-                    store.ClosestDepot = depot;
-                    closest = current;
-                }
-            }
-
-            _stores.Add(store);
-
+            });
 
         }
 
@@ -94,28 +79,59 @@ namespace DroneDelivery.Lib
 
             _stores.Remove(store);
         }
+
+        /// <summary>
+        /// Calculates closest distance between customer, depot and drone.
+        /// </summary>
+        /// <param name="customerAddress">Address of a customer</param>
+        /// <returns>DeliveryPlan, which contains routes and estimated time.</returns>
         public async Task<DeliveryPlan> Calculate(string customerAddress)
         {
             DeliveryPlan plan = new DeliveryPlan();
             Location customer = new Location();
             customer = await _locationService.Find(customerAddress);
             plan.Customer = customer;
+            IList<ShortestPathResult> pathResults = new List<ShortestPathResult>();
+            Dictionary<uint, DroneDepot> DepotMap = new Dictionary<uint, DroneDepot>();
+            Dictionary<uint, Store> StoreMap = new Dictionary<uint, Store>();
 
-            double? minTotalDistance = double.MaxValue,
-            currentTotalDistance;
+            // Creating graph to be able to use Dijkstra algorithm to find the shortest path.
+            var graph = new Graph<string, string>();
+            uint customerId = graph.AddNode("Customer");
 
-            foreach (Store store in _stores)
+            foreach (DroneDepot depot in Depots)
             {
-                currentTotalDistance = store.Coordinate.Distance(store.ClosestDepot.Coordinate) + store.Coordinate.Distance(customer.Coordinate);
-                if (currentTotalDistance < minTotalDistance)
+                uint depotId = graph.AddNode(depot.Name);
+                DepotMap.Add(depotId, depot);
+                foreach (Store store in _stores)
                 {
-                    plan.Store = store;
-                    minTotalDistance = currentTotalDistance;
+                    uint storeId = graph.AddNode(store.Name);
+                    StoreMap.Add(storeId, store);
+
+                    // converting KM to M, because the cost variable is int, so the accuracy will be in meters.
+                    graph.Connect(depotId, storeId, (int)(depot.Coordinate.Distance(store.Coordinate) * 1000), $"{depot.Name} -> {store.Name}");
+                    graph.Connect(storeId, customerId, (int)(store.Coordinate.Distance(customer.Coordinate) * 1000), $"{store.Name} -> Customer");
                 }
+                pathResults.Add(graph.Dijkstra(depotId, customerId));
             }
 
-            double hours = minTotalDistance.HasValue ? minTotalDistance.Value / DRONESPEED : 0;
-            plan.TotalDeliveryTime = TimeSpan.FromHours(hours);
+            // Find the shortest path from path results. Depot -> Store -> Customer
+            ShortestPathResult shortestPath = pathResults[0];
+
+            for (int i = 1; i < pathResults.Count; i++)
+            {
+                shortestPath = pathResults[i].Distance < shortestPath.Distance ? pathResults[i] : shortestPath;
+            }
+
+            // Get chosen shortest distance units.
+            IList<uint> nodeList = shortestPath.GetPath().ToList();
+
+            plan.Depot = DepotMap.Where(x => x.Key == nodeList[0]).Select(x => x.Value).SingleOrDefault();
+            plan.Store = StoreMap.Where(x => x.Key == nodeList[1]).Select(x => x.Value).SingleOrDefault();
+
+            // Calculate delivery time.
+            double hours = shortestPath.Distance / DRONESPEED;
+            plan.TotalDeliveryTime = TimeSpan.FromSeconds(hours);
 
             return plan;
         }

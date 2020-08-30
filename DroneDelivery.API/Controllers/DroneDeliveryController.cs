@@ -32,7 +32,7 @@ namespace DroneDelivery.API.Controllers
             return new DeliveryPlanResult()
             {
                 Customer = plan.Customer.Address,
-                Depot = plan.Store.ClosestDepot.Address,
+                Depot = plan.Depot.Address,
                 Store = plan.Store.Address,
                 DeliveryTime = new DeliveryTime()
                 {

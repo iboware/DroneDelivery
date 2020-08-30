@@ -45,7 +45,7 @@ namespace DroneDelivery.CLI
         {
             Console.WriteLine($"Shortest path for Address: {plan.Customer.Address}");
             Console.WriteLine($"---------------------------------------------------------------");
-            Console.WriteLine($"Depot:{plan.Store.ClosestDepot.Address} -> Store: {plan.Store.Address} -> Customer: {plan.Customer.Address}");
+            Console.WriteLine($"Depot:{plan.Depot.Address} -> Store: {plan.Store.Address} -> Customer: {plan.Customer.Address}");
             Console.WriteLine($"Total Delivery Time: {(int)plan.TotalDeliveryTime.TotalMinutes}:{plan.TotalDeliveryTime.Seconds}");
         }
     }
