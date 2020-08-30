@@ -1,6 +1,6 @@
 # DroneDelivery
 
-Finds the closest distance between a drone, store and a customer using Djikstra's Algorithm and OpenStreetMap Nominatim API. 
+Finds the closest distance between a drone depot, store and a customer using Djikstra's Algorithm and OpenStreetMap Nominatim API. 
 
 Example API Request:
 `https://localhost:5001/DroneDelivery?address=Katernberger Str. 107, 45327 Essen`
